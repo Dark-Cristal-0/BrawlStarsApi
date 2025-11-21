@@ -1,10 +1,3 @@
-const {PlayerTag} = require("./primitive/PlayerTag")
-
-const {PlayerIcon} = require("./PlayerIcon")
-const {BrawlerStatList} = require("./BrawlerStat")
-const {PlayerClub} = require("./PlayerClub")
-
-
 const { PlayerTag } = require("./primitive/PlayerTag");
 const { ColorCode } = require("./primitive/ColorCode");
 const { PlayerIcon } = require("./PlayerIcon");
@@ -88,6 +81,22 @@ class Player {
     this.bestTimeAsBigBrawler = bestTimeAsBigBrawler;
     this.brawlers = brawlers;
     this.nameColor = nameColor;
+  }
+  static fromObject(data){
+    return new Player(
+      PlayerClub.fromObject(data.club),
+      data.isQualifiedFromChampionshipChallenge,
+      data["3vs3Victories"],
+      PlayerIcon.fromObject(data.icon),
+      new PlayerTag(data.tag),
+      data.name,
+      data.trophies,
+      data.expLevel,data.expPoints,
+      data.highestTrophies,
+      data.soloVictories,
+      data.duoVictories,
+      data.bestRoboRumbleTime,data.bestTimeAsBigBrawler,
+      BrawlerStatList.fromObject(data.brawlers),data.nameColor?new ColorCode(data.nameColor):new ColorCode("0xff000000"))
   }
 }
 

@@ -1,3 +1,4 @@
+const {TypedArray} = require("./../TypedArray")
 class Accessory {
   /**
    * @param {number} id 
@@ -40,84 +41,75 @@ class Accessory {
 
 
 
-class AccessoryList extends Array {
+/**
+ * Типобезпечний список аксесуарів.
+ * @extends {TypedArray<Accessory>}
+ */
+class AccessoryList extends TypedArray {
   /**
-   * @param {...Accessory} items
+   * @param {Iterable<Accessory>} [items]
    */
-  constructor(...items) {
-    const validated = items.map(AccessoryList._validate);
-    super(...validated);
-
-    const proxy = new Proxy(this, {
-      set(target, prop, value) {
-        if (!isNaN(prop)) {
-          if (value === undefined) {
-            throw new TypeError("Cannot assign undefined to AccessoryList");
-          }
-          AccessoryList._validate(value);
-        }
-        target[prop] = value;
-        return true;
-      }
-    });
-
-    Object.setPrototypeOf(proxy, AccessoryList.prototype);
-    return proxy;
+  constructor(items = []) {
+    super(Accessory, items);
   }
 
   /**
-   * @param {*} item
-   * @returns {Accessory}
-   */
-  static _validate(item) {
-    if (!(item instanceof Accessory)) {
-      throw new TypeError('AccessoryList accepts only Accessory instances');
-    }
-    return item;
-  }
-
-  /**
-   * @param {any[]} jsonArray
+   * Створює AccessoryList з plain-об'єктів.
+   * @param {Array<Object>} data
    * @returns {AccessoryList}
    */
-  static fromJson(jsonArray) {
-    if (!Array.isArray(jsonArray)) {
-      throw new TypeError("AccessoryList.fromJson expects an array");
-    }
-    const items = jsonArray.map(Accessory.fromJson);
-    return new AccessoryList(...items);
+  static fromObject(data) {
+    return new this(data.map(el => Accessory.fromObject(el)));
   }
 
   /**
-   * @returns {void}
+   * Перевіряє кожен аксесуар через item.validate().
    */
   validate() {
     this.forEach(item => item.validate());
   }
 
-  push(...items) {
-    items.forEach(AccessoryList._validate);
-    return super.push(...items);
+  /**
+   * Повертає AccessoryList після фільтрації.
+   * @param {(value: Accessory, index: number, array: Accessory[]) => boolean} callback
+   * @param {*} [thisArg]
+   * @returns {AccessoryList}
+   */
+  filter(callback, thisArg) {
+    const filtered = super.filter(callback, thisArg);
+    return new AccessoryList(filtered);
   }
 
-  unshift(...items) {
-    items.forEach(AccessoryList._validate);
-    return super.unshift(...items);
+  /**
+   * Повертає AccessoryList після slice.
+   * @param {number} [start]
+   * @param {number} [end]
+   * @returns {AccessoryList}
+   */
+  slice(start, end) {
+    const sliced = super.slice(start, end);
+    return new AccessoryList(sliced);
   }
 
-  fill(item, start = 0, end = this.length) {
-    AccessoryList._validate(item);
-    return super.fill(item, start, end);
-  }
-
+  /**
+   * Об'єднує списки аксесуарів.
+   * @param {...(Accessory[]|AccessoryList)} lists
+   * @returns {AccessoryList}
+   */
   concat(...lists) {
-    const flat = lists.flat();
-    flat.forEach(AccessoryList._validate);
-    return super.concat(...lists);
+    const result = new AccessoryList(this);
+    for (const list of lists) {
+      this._assertValidArray(list);
+      for (const item of list) result.push(item);
+    }
+    return result;
   }
 
+  /**
+   * Повертає Array при map/flatMap, щоб уникнути помилок.
+   */
   static get [Symbol.species]() {
-    return super[Symbol.species];
+    return Array;
   }
 }
 

@@ -45,6 +45,9 @@ class Club {
     this.type = type;
     this.badgeId = badgeId;
   }
+  static fromObject(data){
+    return new Club(new ClubTag(data.tag),data.name,new ClubDescription(data.description),data.trophies,data.requiredTrophies,ClubMemberList.fromObject(data.members),new ClubType(data.type),new ClubBadgeId(data.badgeId))
+  }
 }
 
 module.exports = {

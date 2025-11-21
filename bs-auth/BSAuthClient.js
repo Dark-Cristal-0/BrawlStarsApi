@@ -5,16 +5,13 @@
  */
 
 const https = require("https");
-const {getPublicIP} = require("./util/getPublicIp")
-
-
-
-
+const {getPublicIP} = require("../util/getPublicIp")
 
 /**
- * @typedef {Object} ScopeLimit
- * @property {string} tier - Наприклад, "developer/silver"
- * @property {string} type - Тип ліміту, наприклад "throttling"
+ * @typedef {Object} ApiStatus
+ * @property {number} code - Код статусу (0 — успішно, >0 — помилка)
+ * @property {string} message - Повідомлення про результат
+ * @property {string | null} detail - Додаткові пояснення (може бути null)
  */
 
 /**
@@ -25,23 +22,42 @@ const {getPublicIP} = require("./util/getPublicIp")
 
 /**
  * @typedef {Object} ApiKey
- * @property {string} id
- * @property {string} developerId
- * @property {string} tier
- * @property {string} name
- * @property {string} description
- * @property {string[] | null} origins
- * @property {string[]} scopes
- * @property {(ScopeLimit | CidrLimit)[]} limits
- * @property {string | null} validUntil
- * @property {string} key
+ * @property {string} id - Унікальний ID ключа
+ * @property {string} developerId - ID розробника
+ * @property {string} tier - Рівень доступу (наприклад "developer/silver")
+ * @property {string} name - Назва ключа
+ * @property {string} description - Опис ключа
+ * @property {string[] | null} origins - Список дозволених origin-адрес (може бути null)
+ * @property {string[]} scopes - Список дозволених API (наприклад ["brawlstars"])
+ * @property {CidrLimit[]} cidrRanges - Обмеження по IP
+ * @property {string | null} validUntil - Дата закінчення дії ключа (може бути null)
+ * @property {string} key - JWT токен
  */
 
 /**
  * @typedef {Object} ListKeysResponse
- * @property {{ code: number, message: string, detail: string | null }} status
- * @property {number} sessionExpiresInSeconds
- * @property {ApiKey[]} keys
+ * @property {ApiStatus} status - Статус відповіді
+ * @property {number} sessionExpiresInSeconds - Час дії сесії в секундах
+ * @property {ApiKey[]} keys - Список доступних ключів
+ */
+
+/**
+ * @typedef {Object} CreateKeyResponse
+ * @property {ApiStatus} status - Статус відповіді
+ * @property {number} sessionExpiresInSeconds - Час дії сесії в секундах
+ * @property {ApiKey} key - Створений ключ
+ */
+
+/**
+ * @typedef {Object} DeleteKeyResponse
+ * @property {ApiStatus} status - Статус відповіді
+ * @property {number} sessionExpiresInSeconds - Час дії сесії в секундах
+ */
+
+/**
+ * @typedef {Object} LoginResponse
+ * @property {ApiStatus} status - Статус відповіді
+ * @property {number} sessionExpiresInSeconds - Час дії сесії в секундах
  */
 
 /**
@@ -113,14 +129,14 @@ class BSAuthClient {
    * Створює новий API-ключ для заданої IP-адреси або автоматично визначає її.
    *
    * @param {string} [ip] - CIDR-адреса, наприклад "193.106.145.57". Якщо не задано — буде використано глобальну IP.
-   * @returns {Promise<string>} JWT-ключ у вигляді рядка.
+   * @returns {Promise<CreateKeyResponse>} JWT-ключ у вигляді рядка.
    * @throws {Error} Якщо IP невалідний або створення ключа неуспішне.
    *
    * @example
-   * const key = await client.createKey(); // автоматично визначить IP
-   * const key2 = await client.createKey("193.106.145.57"); // вручну
+   * const key = await client.createKey(); // автоматично визначить IP та створитть назву
+   * const key2 = await client.createKey("193.106.145.57","nameKey"); // вручну
    */
-  async createKey(ip) {
+  async createKey(ip, name=`autoCreate`) {
     await this.ensureSession();
 
     const finalIP = ip || await getPublicIP();
@@ -129,8 +145,8 @@ class BSAuthClient {
     }
 
     const keyData = JSON.stringify({
-      name: `autoCreate: ${finalIP}`,
-      description: `Date: ${new Date().toLocaleDateString()}`,
+      name: name,
+      description: `[${finalIP}] Date: ${new Date().toLocaleDateString()} ${new Date().toTimeString().replace(/\(.+\)/s,"")}`,
       cidrRanges: [finalIP],
       scopes: null
     });
@@ -155,7 +171,7 @@ class BSAuthClient {
           const response = JSON.parse(body);
           const key = response.key?.key;
           if (!key) return reject(new Error("Key creation failed"));
-          resolve(key);
+          resolve(response);
         });
       });
 
@@ -177,61 +193,6 @@ class BSAuthClient {
     if (!this.cookies || Date.now() > this.sessionExpiresAt) {
       await this.login();
     }
-  }
-
-  /**
-   * Створює новий API-ключ для заданої IP-адреси.
-   *
-   * @param {string} ip - CIDR-адреса, наприклад "193.106.145.57"
-   * @returns {Promise<string>} JWT-ключ у вигляді рядка.
-   * @throws {Error} Якщо IP не заданий або невалідний.
-   *
-   * @example
-   * const key = await client.createKey("193.106.145.57");
-   * console.log("Створено ключ:", key);
-   */
-  async createKey(ip) {
-    if (!ip || typeof ip !== "string") {
-      throw new Error("IP повинен бути рядком");
-    }
-
-    await this.ensureSession();
-
-    const keyData = JSON.stringify({
-      name: `autoCreate: ${ip}`,
-      description: `Date: ${new Date().toLocaleDateString()}`,
-      cidrRanges: [ip],
-      scopes: null
-    });
-
-    const options = {
-      protocol: "https:",
-      hostname: BSAuthClient.HOSTNAME,
-      path: BSAuthClient.PATHS.createKey,
-      method: "POST",
-      headers: {
-        "Cookie": this.cookies,
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(keyData)
-      }
-    };
-
-    return new Promise((resolve, reject) => {
-      const req = https.request(options, (res) => {
-        let body = "";
-        res.on("data", chunk => body += chunk);
-        res.on("end", () => {
-          const response = JSON.parse(body);
-          const key = response.key?.key;
-          if (!key) return reject(new Error("Key creation failed"));
-          resolve(key);
-        });
-      });
-
-      req.on("error", err => reject(new Error("Create Key Error: " + err)));
-      req.write(keyData);
-      req.end();
-    });
   }
 
   /**
@@ -290,7 +251,7 @@ class BSAuthClient {
    * const success = await client.revokeKey("e5ab3cf4-ab5b-49a4-bd0f-7f4a6b22a963");
    * console.log("Відкликання успішне:", success);
    */
-  async revokeKey(id) {
+  async deleteKey(id) {
     if (!id || typeof id !== "string") {
       throw new Error("ID ключа обов'язковий");
     }
@@ -317,6 +278,9 @@ class BSAuthClient {
         res.on("data", chunk => body += chunk);
         res.on("end", () => {
           try {
+            /**
+             * @type {DeleteKeyResponse}
+             */
             const parsed = JSON.parse(body);
             if (parsed.status?.message === "ok") {
               resolve(true);
@@ -381,3 +345,25 @@ class BSAuthClient {
 }
 
 module.exports = { BSAuthClient };
+
+
+
+// const bs_dev = new BSAuthClient("0dark0cristal0@gmail.com","fhcty1416")
+// bs_dev.login().then(()=>{
+  
+  
+//   bs_dev.listKeys().then(async (list)=>{
+    
+//     list.keys.forEach((apikey)=>{
+//     if(apikey.name == "testBSApi"){
+//       bs_dev.deleteKey(apikey.id)
+//       console.log(apikey)
+//     }
+//     })
+//     bs_dev.listKeys().then((v)=>{
+//       console.log(JSON.stringify(v.keys.map((el)=>{return{name:el.name,cidrRanges:el.cidrRanges,desc:el.description}}),null,2))
+//     })
+    
+//   })
+
+// })

@@ -5,20 +5,23 @@ class GearStat {
    * @param {number} level 
    */
   constructor(id, name, level) {
-    if (!(typeof id === "number" && typeof name === "string" && typeof level === "number")) {
+    if (!(typeof id === "number" && typeof name === "string")) {
       throw new Error("GearStat constructor data invalid");
     }
     this.id = id;
     this.name = name;
-    this.level = level;
+
+  }
+  static fromObject(data){
+    return new GearStat(data.id,data.name)
   }
 }
 
 class GearStatList extends Array {
   /**
-   * @param {...GearStat} items
+   * @param {GearStat} items
    */
-  constructor(...items) {
+  constructor(items) {
     const validated = items.map(GearStatList._validate);
     super(...validated);
 
@@ -37,6 +40,13 @@ class GearStatList extends Array {
 
     Object.setPrototypeOf(proxy, GearStatList.prototype);
     return proxy;
+  }
+
+  static fromObject(data){
+    if(data.length >0){
+      return new GearStatList(data.map((el)=>GearStat.fromObject(el)))
+    }
+    return new GearStatList([])
   }
 
   /**

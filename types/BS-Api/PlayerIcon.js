@@ -9,6 +9,9 @@ class PlayerIcon{
     }
     this.id = id
   }
+  static fromObject(data){
+    return new PlayerIcon(data.id)
+  }
 }
 module.exports = {
   PlayerIcon

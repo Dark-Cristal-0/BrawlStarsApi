@@ -1,4 +1,4 @@
-class GameMode extends String {
+class EventMode extends String {
   static allowed = [
     'soloShowdown', 'duoShowdown', 'heist', 'bounty', 'siege', 'gemGrab',
     'brawlBall', 'bigGame', 'bossFight', 'roboRumble', 'takedown', 'loneStar',
@@ -15,7 +15,7 @@ class GameMode extends String {
    * @throws {Error} Якщо режим не входить до списку дозволених.
    */
   constructor(mode) {
-    if (!GameMode.allowed.includes(mode)) {
+    if (!EventMode.allowed.includes(mode)) {
       throw new Error(`Invalid game mode: ${mode}`);
     }
     super(mode);
@@ -23,5 +23,5 @@ class GameMode extends String {
 }
 
 module.exports = {
-  GameMode,
+  EventMode,
 };
